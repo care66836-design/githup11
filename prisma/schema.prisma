@@ -1,0 +1,911 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum EmployeeStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum ProjectStatus {
+  INTAKE
+  DIAGNOSIS
+  POSITIONING
+  CONTENT
+  LIVE
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum ProjectMemberRole {
+  OWNER
+  LEAD
+  CONTRIBUTOR
+  VIEWER
+}
+
+enum ReportStatus {
+  DRAFT
+  REVIEWED
+  APPROVED
+  ARCHIVED
+}
+
+enum VoiceSampleType {
+  SPOKEN_TRANSCRIPT
+  PUBLISHED_COPY
+  PREFERRED_STYLE
+  DISLIKED_STYLE
+  CHAT_SAMPLE
+}
+
+enum AudienceType {
+  CORE
+  EXTENDED
+  EXCLUDED
+}
+
+enum PositioningOptionType {
+  STABLE
+  DIFFERENTIATED
+  COMMERCE
+}
+
+enum PositioningOptionStatus {
+  GENERATED
+  SHORTLISTED
+  SELECTED
+  REJECTED
+}
+
+enum ContentPillarType {
+  TRAFFIC
+  TRUST
+  PERSONA
+  CONVERSION
+}
+
+enum ContentFormat {
+  SHORT_VIDEO
+  IMAGE_POST
+  LONG_POST
+  LIVE_PREVIEW
+  LIVE_CLIP
+}
+
+enum ContentMode {
+  NATIVE_SPOKEN
+  IP_OPINION
+  DAILY_RECORD
+  COMMERCE_CONVERSION
+}
+
+enum ContentDraftStatus {
+  DRAFT
+  STYLE_REVIEWED
+  HUMAN_EDITED
+  IN_REVIEW
+  APPROVED
+  ARCHIVED
+}
+
+enum RevisionSource {
+  AI_INITIAL
+  AI_REWRITE
+  EMPLOYEE_EDIT
+  APPROVED_FINAL
+}
+
+enum ProductRole {
+  TRAFFIC
+  HERO
+  PROFIT
+  IMAGE
+  CROSS_SELL
+}
+
+enum FitRecommendation {
+  REJECT
+  CAUTION
+  TEST
+  RECOMMENDED
+  PRIORITY
+}
+
+enum LiveSessionStatus {
+  PLANNED
+  READY
+  LIVE
+  COMPLETED
+  REVIEWED
+  CANCELLED
+}
+
+enum LiveScriptBlockType {
+  OPENING
+  RETENTION
+  INTERACTION
+  NEED_DIAGNOSIS
+  SCENE_DEMO
+  PRODUCT_EXPLANATION
+  SIZE_GUIDANCE
+  OBJECTION_HANDLING
+  PRICE_EXPLANATION
+  CONVERSION_CALL
+  CROSS_SELL
+  COLD_ROOM_RECOVERY
+  NEGATIVE_COMMENT
+  CLOSING_SUMMARY
+  NEXT_SESSION_PREVIEW
+}
+
+enum LiveIssueType {
+  TRAFFIC
+  RETENTION
+  TRUST
+  PRODUCT
+  SCRIPT
+  CONVERSION
+  FULFILLMENT_REFUND
+}
+
+enum KnowledgeStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  REVIEW
+  APPROVE
+  ARCHIVE
+  EXPORT
+  ASSIGN
+  REMOVE
+  LOGIN
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  description String?
+  employees   Employee[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model Employee {
+  id                           String                 @id @default(cuid())
+  name                         String
+  email                        String                 @unique
+  authSubject                  String?                @unique
+  status                       EmployeeStatus         @default(INVITED)
+  avatarUrl                    String?
+  lastLoginAt                  DateTime?
+  roleId                       String
+  role                         Role                   @relation(fields: [roleId], references: [id])
+  projectMemberships           ProjectMember[]
+  createdProjects              Project[]              @relation("ProjectCreator")
+  generatedPositioningSessions PositioningSession[]   @relation("PositioningGenerator")
+  createdReports               PositioningReport[]    @relation("ReportCreator")
+  editedReports                PositioningReport[]    @relation("ReportEditor")
+  reviewedReports              PositioningReport[]    @relation("ReportReviewer")
+  approvedReports              PositioningReport[]    @relation("ReportApprover")
+  approvedVoiceProfiles        CreatorVoiceProfile[]  @relation("VoiceProfileApprover")
+  createdContentPlans          ContentPlan[]          @relation("ContentPlanCreator")
+  createdContentDrafts         ContentDraft[]         @relation("ContentDraftCreator")
+  contentRevisions             ContentRevision[]      @relation("RevisionEditor")
+  styleReviews                 AIStyleReview[]        @relation("StyleReviewReviewer")
+  productAssessments           ProductFitAssessment[] @relation("ProductAssessor")
+  createdLiveScripts           LiveScript[]           @relation("LiveScriptCreator")
+  liveReviews                  LiveReview[]           @relation("LiveReviewReviewer")
+  knowledgeReviews             KnowledgeReview[]      @relation("KnowledgeReviewer")
+  auditLogs                    AuditLog[]             @relation("AuditActor")
+  createdAt                    DateTime               @default(now())
+  updatedAt                    DateTime               @updatedAt
+
+  @@index([roleId, status])
+}
+
+model Client {
+  id                 String               @id @default(cuid())
+  displayName        String
+  legalNameEncrypted String?
+  phoneEncrypted     String?
+  emailEncrypted     String?
+  wechatEncrypted    String?
+  sensitivityLevel   Int                  @default(1)
+  city               String?
+  industryRole       String?
+  notes              String?
+  projects           Project[]
+  pets               Pet[]
+  voiceProfile       CreatorVoiceProfile?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([displayName])
+  @@index([sensitivityLevel])
+}
+
+model Project {
+  id                  String                 @id @default(cuid())
+  code                String                 @unique
+  name                String
+  status              ProjectStatus          @default(INTAKE)
+  currentStage        String
+  nextMilestone       String?
+  nextMilestoneAt     DateTime?
+  clientId            String
+  client              Client                 @relation(fields: [clientId], references: [id])
+  createdById         String
+  createdBy           Employee               @relation("ProjectCreator", fields: [createdById], references: [id])
+  members             ProjectMember[]
+  petPersonas         PetPersona[]
+  audienceSegments    AudienceSegment[]
+  positioningSessions PositioningSession[]
+  positioningReports  PositioningReport[]
+  contentPlans        ContentPlan[]
+  contentDrafts       ContentDraft[]
+  products            Product[]
+  productAssessments  ProductFitAssessment[]
+  liveRoomProfiles    LiveRoomProfile[]
+  liveSessions        LiveSession[]
+  liveScripts         LiveScript[]
+  auditLogs           AuditLog[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@index([clientId, status])
+  @@index([status, nextMilestoneAt])
+}
+
+model ProjectMember {
+  projectId  String
+  employeeId String
+  role       ProjectMemberRole @default(CONTRIBUTOR)
+  assignedAt DateTime          @default(now())
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  employee   Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, employeeId])
+  @@index([employeeId, role])
+}
+
+model CreatorVoiceProfile {
+  id                       String        @id @default(cuid())
+  clientId                 String        @unique
+  client                   Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tone                     String
+  professionalLevel        Int           @default(50)
+  humorLevel               Int           @default(50)
+  emotionalIntensity       Int           @default(50)
+  colloquialLevel          Int           @default(50)
+  sentenceLengthPreference String
+  rhythmStyle              String
+  commonWords              String
+  bannedWords              String
+  catchphrases             String
+  openingStyle             String
+  endingStyle              String
+  controversyTolerance     Int           @default(30)
+  salesIntensity           Int           @default(40)
+  employeeNotes            String?
+  approvedAt               DateTime?
+  approvedById             String?
+  approvedBy               Employee?     @relation("VoiceProfileApprover", fields: [approvedById], references: [id])
+  samples                  VoiceSample[]
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+
+  @@index([approvedById, approvedAt])
+}
+
+model VoiceSample {
+  id             String              @id @default(cuid())
+  voiceProfileId String
+  voiceProfile   CreatorVoiceProfile @relation(fields: [voiceProfileId], references: [id], onDelete: Cascade)
+  type           VoiceSampleType
+  title          String
+  content        String
+  sourceNote     String?
+  isApproved     Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+
+  @@index([voiceProfileId, type, isApproved])
+}
+
+model Pet {
+  id             String       @id @default(cuid())
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name           String
+  species        String
+  breed          String?
+  birthDate      DateTime?
+  appearance     String?
+  personality    String?
+  behavior       String?
+  specialStories String?
+  imageUrl       String?
+  personas       PetPersona[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([clientId, species])
+}
+
+model PetPersona {
+  id                  String   @id @default(cuid())
+  projectId           String
+  petId               String
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pet                 Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  roleName            String
+  oneSentenceRole     String
+  personalityTags     String
+  coreMemoryPoint     String
+  mainContentFunction String
+  suitableScenes      String
+  unsuitableTraits    String
+  cameraSuitability   Int
+  contentSuitability  Int
+  liveSuitability     Int
+  storyPotential      Int
+  relationshipModel   String
+  emotionalValue      String
+  recurringConflict   String?
+  recurringStory      String
+  audienceConnection  String
+  expectedChange      String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([projectId, petId])
+  @@index([projectId, liveSuitability])
+}
+
+model AudienceSegment {
+  id                String       @id @default(cuid())
+  projectId         String
+  project           Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type              AudienceType
+  name              String
+  ageRange          String?
+  cities            String?
+  spendingPower     String?
+  petOwnershipStage String?
+  lifestyle         String?
+  painPoints        String
+  emotionalNeeds    String?
+  contentNeeds      String?
+  purchaseScenarios String?
+  decisionBarriers  String?
+  categories        String?
+  willingnessToPay  String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([projectId, type])
+}
+
+model PositioningSession {
+  id            String              @id @default(cuid())
+  projectId     String
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generatedById String
+  generatedBy   Employee            @relation("PositioningGenerator", fields: [generatedById], references: [id])
+  diagnosisNote String?
+  options       PositioningOption[]
+  createdAt     DateTime            @default(now())
+
+  @@index([projectId, createdAt])
+}
+
+model PositioningOption {
+  id                     String                  @id @default(cuid())
+  positioningSessionId   String
+  positioningSession     PositioningSession      @relation(fields: [positioningSessionId], references: [id], onDelete: Cascade)
+  optionType             PositioningOptionType
+  status                 PositioningOptionStatus @default(GENERATED)
+  oneSentencePositioning String
+  creatorPersona         String
+  petPersona             String
+  relationshipModel      String
+  coreAudience           String
+  audienceValue          String
+  platformStrategy       String
+  monetizationStrategy   String
+  liveCommerceFit        Int
+  executionDifficulty    Int
+  advantages             String
+  disadvantages          String
+  risks                  String
+  recommendationScore    Int
+  contentPillars         ContentPillar[]
+  scores                 PositioningScore[]
+  selectedInReports      PositioningReport[]     @relation("SelectedOptionReports")
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  @@unique([positioningSessionId, optionType])
+  @@index([status, recommendationScore])
+}
+
+model PositioningScore {
+  id                  String            @id @default(cuid())
+  positioningOptionId String
+  positioningOption   PositioningOption @relation(fields: [positioningOptionId], references: [id], onDelete: Cascade)
+  module              String
+  dimension           String
+  score               Int
+  evidence            String
+  riskNote            String?
+
+  @@index([positioningOptionId, module])
+}
+
+model ContentPillar {
+  id                   String            @id @default(cuid())
+  positioningOptionId  String
+  positioningOption    PositioningOption @relation(fields: [positioningOptionId], references: [id], onDelete: Cascade)
+  type                 ContentPillarType
+  name                 String
+  description          String
+  ratio                Int
+  suitableFormats      String
+  unsuitableFormats    String?
+  productionDifficulty Int
+  planItems            ContentPlanItem[]
+
+  @@index([positioningOptionId, type])
+}
+
+model PositioningReport {
+  id               String                     @id @default(cuid())
+  projectId        String
+  project          Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  selectedOptionId String?
+  selectedOption   PositioningOption?         @relation("SelectedOptionReports", fields: [selectedOptionId], references: [id])
+  title            String
+  status           ReportStatus               @default(DRAFT)
+  version          Int                        @default(1)
+  createdById      String
+  createdBy        Employee                   @relation("ReportCreator", fields: [createdById], references: [id])
+  lastEditedById   String?
+  lastEditedBy     Employee?                  @relation("ReportEditor", fields: [lastEditedById], references: [id])
+  reviewedById     String?
+  reviewedBy       Employee?                  @relation("ReportReviewer", fields: [reviewedById], references: [id])
+  reviewedAt       DateTime?
+  approvedById     String?
+  approvedBy       Employee?                  @relation("ReportApprover", fields: [approvedById], references: [id])
+  approvedAt       DateTime?
+  versions         PositioningReportVersion[]
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  @@index([projectId, status, updatedAt])
+  @@index([reviewedById, status])
+}
+
+model PositioningReportVersion {
+  id         String            @id @default(cuid())
+  reportId   String
+  report     PositioningReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  version    Int
+  snapshot   Json
+  changeNote String?
+  createdAt  DateTime          @default(now())
+
+  @@unique([reportId, version])
+}
+
+model ContentPlan {
+  id          String            @id @default(cuid())
+  projectId   String
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  status      ReportStatus      @default(DRAFT)
+  periodStart DateTime
+  periodEnd   DateTime
+  createdById String
+  createdBy   Employee          @relation("ContentPlanCreator", fields: [createdById], references: [id])
+  items       ContentPlanItem[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([projectId, periodStart, periodEnd])
+}
+
+model ContentPlanItem {
+  id              String         @id @default(cuid())
+  contentPlanId   String
+  contentPlan     ContentPlan    @relation(fields: [contentPlanId], references: [id], onDelete: Cascade)
+  contentPillarId String?
+  contentPillar   ContentPillar? @relation(fields: [contentPillarId], references: [id])
+  title           String
+  format          ContentFormat
+  mode            ContentMode
+  objective       String
+  plannedAt       DateTime?
+  drafts          ContentDraft[]
+  createdAt       DateTime       @default(now())
+
+  @@index([contentPlanId, plannedAt])
+  @@index([contentPillarId])
+}
+
+model ContentDraft {
+  id                String             @id @default(cuid())
+  projectId         String
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contentPlanItemId String?
+  contentPlanItem   ContentPlanItem?   @relation(fields: [contentPlanItemId], references: [id])
+  title             String
+  format            ContentFormat
+  mode              ContentMode
+  status            ContentDraftStatus @default(DRAFT)
+  currentBody       String
+  createdById       String
+  createdBy         Employee           @relation("ContentDraftCreator", fields: [createdById], references: [id])
+  revisions         ContentRevision[]
+  styleReviews      AIStyleReview[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([projectId, status, updatedAt])
+  @@index([contentPlanItemId])
+}
+
+model ContentRevision {
+  id             String          @id @default(cuid())
+  contentDraftId String
+  contentDraft   ContentDraft    @relation(fields: [contentDraftId], references: [id], onDelete: Cascade)
+  version        Int
+  source         RevisionSource
+  body           String
+  changeNote     String?
+  editedById     String?
+  editedBy       Employee?       @relation("RevisionEditor", fields: [editedById], references: [id])
+  styleReviews   AIStyleReview[]
+  createdAt      DateTime        @default(now())
+
+  @@unique([contentDraftId, version])
+  @@index([editedById, createdAt])
+}
+
+model AIStyleReview {
+  id                      String           @id @default(cuid())
+  contentDraftId          String
+  contentDraft            ContentDraft     @relation(fields: [contentDraftId], references: [id], onDelete: Cascade)
+  contentRevisionId       String?
+  contentRevision         ContentRevision? @relation(fields: [contentRevisionId], references: [id])
+  genericPhraseScore      Int
+  personaConsistencyScore Int
+  spokenNaturalnessScore  Int
+  detailDensityScore      Int
+  repetitionScore         Int
+  salesPressureScore      Int
+  detectedProblems        Json
+  rewriteSuggestions      Json
+  reviewedById            String?
+  reviewedBy              Employee?        @relation("StyleReviewReviewer", fields: [reviewedById], references: [id])
+  createdAt               DateTime         @default(now())
+
+  @@index([contentDraftId, createdAt])
+  @@index([personaConsistencyScore, spokenNaturalnessScore])
+}
+
+model ProductCategory {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Product {
+  id                        String                 @id @default(cuid())
+  projectId                 String
+  project                   Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  categoryId                String
+  category                  ProductCategory        @relation(fields: [categoryId], references: [id])
+  name                      String
+  sku                       String?
+  role                      ProductRole
+  suitablePets              String
+  useScenario               String
+  coreSellingPoints         String
+  price                     Float
+  grossMarginRate           Float?
+  commissionRate            Float?
+  inventory                 Int?
+  afterSalesRisk            Int
+  returnRisk                Int
+  contentDisplayDifficulty  Int
+  liveExplanationDifficulty Int
+  active                    Boolean                @default(true)
+  fitAssessments            ProductFitAssessment[]
+  liveProducts              LiveProduct[]
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+
+  @@index([projectId, role, active])
+  @@index([categoryId])
+}
+
+model ProductFitAssessment {
+  id                    String            @id @default(cuid())
+  projectId             String
+  project               Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  productId             String
+  product               Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ipFit                 Int
+  audienceFit           Int
+  shortVideoFit         Int
+  liveFit               Int
+  displayDifficulty     Int
+  explanationDifficulty Int
+  afterSalesRisk        Int
+  returnRisk            Int
+  grossMarginRate       Float?
+  commissionRate        Float?
+  recommendation        FitRecommendation
+  rationale             String
+  assessedById          String
+  assessedBy            Employee          @relation("ProductAssessor", fields: [assessedById], references: [id])
+  createdAt             DateTime          @default(now())
+
+  @@index([projectId, recommendation])
+  @@index([productId, createdAt])
+}
+
+model LiveRoomProfile {
+  id                     String        @id @default(cuid())
+  projectId              String
+  project                Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version                Int           @default(1)
+  status                 ReportStatus  @default(DRAFT)
+  oneSentencePositioning String
+  hostRole               String
+  petRole                String
+  targetAudience         String
+  coreScenario           String
+  retentionReason        String
+  trustReason            String
+  purchaseReason         String
+  productCategories      String
+  priceRange             String
+  hostStyle              String
+  visualStyle            String
+  liveRhythm             String
+  petAppearancePlan      String
+  salesIntensity         Int
+  sessions               LiveSession[]
+  scripts                LiveScript[]
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  @@unique([projectId, version])
+  @@index([projectId, status])
+}
+
+model LiveSession {
+  id                String            @id @default(cuid())
+  projectId         String
+  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  liveRoomProfileId String?
+  liveRoomProfile   LiveRoomProfile?  @relation(fields: [liveRoomProfileId], references: [id])
+  title             String
+  platform          String
+  status            LiveSessionStatus @default(PLANNED)
+  scheduledAt       DateTime?
+  startedAt         DateTime?
+  endedAt           DateTime?
+  scripts           LiveScript[]
+  products          LiveProduct[]
+  metric            LiveMetric?
+  review            LiveReview?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([projectId, status, scheduledAt])
+}
+
+model LiveScript {
+  id                String            @id @default(cuid())
+  projectId         String
+  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  liveRoomProfileId String?
+  liveRoomProfile   LiveRoomProfile?  @relation(fields: [liveRoomProfileId], references: [id])
+  liveSessionId     String?
+  liveSession       LiveSession?      @relation(fields: [liveSessionId], references: [id])
+  title             String
+  status            ReportStatus      @default(DRAFT)
+  createdById       String
+  createdBy         Employee          @relation("LiveScriptCreator", fields: [createdById], references: [id])
+  blocks            LiveScriptBlock[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([projectId, status])
+  @@index([liveSessionId])
+}
+
+model LiveScriptBlock {
+  id           String              @id @default(cuid())
+  liveScriptId String
+  liveScript   LiveScript          @relation(fields: [liveScriptId], references: [id], onDelete: Cascade)
+  type         LiveScriptBlockType
+  title        String
+  objective    String
+  content      String
+  durationSec  Int?
+  sortOrder    Int
+  productId    String?
+  createdAt    DateTime            @default(now())
+
+  @@unique([liveScriptId, sortOrder])
+  @@index([liveScriptId, type])
+}
+
+model LiveProduct {
+  liveSessionId String
+  productId     String
+  role          ProductRole
+  sortOrder     Int
+  targetUnits   Int?
+  liveSession   LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([liveSessionId, productId])
+  @@index([productId])
+}
+
+model LiveMetric {
+  id                       String      @id @default(cuid())
+  liveSessionId            String      @unique
+  liveSession              LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
+  durationMinutes          Int
+  viewers                  Int
+  averageConcurrentViewers Int
+  peakConcurrentViewers    Int
+  entryRate                Float?
+  averageWatchSeconds      Int
+  interactionRate          Float
+  productClickRate         Float
+  clickToOrderRate         Float
+  revenuePerThousandViews  Float
+  grossMerchandiseValue    Float
+  unitsSold                Int
+  averageOrderValue        Float
+  refundRate               Float
+  newFollowers             Int
+  followConversionRate     Float
+  productBreakdownSnapshot Json?
+  timeSegmentSnapshot      Json?
+  scriptNodeSnapshot       Json?
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+}
+
+model LiveReview {
+  id                         String            @id @default(cuid())
+  liveSessionId              String            @unique
+  liveSession                LiveSession       @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
+  summary                    String
+  nextSessionRecommendations String
+  reviewerId                 String
+  reviewer                   Employee          @relation("LiveReviewReviewer", fields: [reviewerId], references: [id])
+  issues                     LiveReviewIssue[]
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
+
+  @@index([reviewerId, createdAt])
+}
+
+model LiveReviewIssue {
+  id             String        @id @default(cuid())
+  liveReviewId   String
+  liveReview     LiveReview    @relation(fields: [liveReviewId], references: [id], onDelete: Cascade)
+  type           LiveIssueType
+  severity       Int
+  evidence       String
+  recommendation String
+
+  @@index([liveReviewId, type])
+}
+
+model PromptVersion {
+  id        String       @id @default(cuid())
+  key       String
+  version   Int
+  purpose   String
+  content   String
+  status    ReportStatus @default(DRAFT)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([key, version])
+  @@index([key, status])
+}
+
+model KnowledgeDocument {
+  id        String            @id @default(cuid())
+  title     String
+  category  String
+  content   String
+  status    KnowledgeStatus   @default(DRAFT)
+  version   Int               @default(1)
+  reviews   KnowledgeReview[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([category, status])
+}
+
+model KnowledgeReview {
+  id                  String            @id @default(cuid())
+  knowledgeDocumentId String
+  knowledgeDocument   KnowledgeDocument @relation(fields: [knowledgeDocumentId], references: [id], onDelete: Cascade)
+  reviewerId          String
+  reviewer            Employee          @relation("KnowledgeReviewer", fields: [reviewerId], references: [id])
+  decision            KnowledgeStatus
+  note                String?
+  createdAt           DateTime          @default(now())
+
+  @@index([knowledgeDocumentId, createdAt])
+  @@index([reviewerId, decision])
+}
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  actorId        String
+  actor          Employee    @relation("AuditActor", fields: [actorId], references: [id])
+  projectId      String?
+  project        Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  action         AuditAction
+  entityType     String
+  entityId       String
+  summary        String
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  ipAddress      String?
+  createdAt      DateTime    @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId, createdAt])
+}
