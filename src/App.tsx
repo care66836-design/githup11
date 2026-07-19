@@ -8,22 +8,24 @@ import { ProjectDetail } from './pages/ProjectDetail'
 import { Projects } from './pages/Projects'
 import { Settings } from './pages/Settings'
 import { Team } from './pages/Team'
+import { WorkspaceProvider } from './state/WorkspaceContext'
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route index element={<Dashboard />} />
-        <Route path="projects" element={<Projects />} />
-        <Route path="projects/:projectId" element={<ProjectDetail />} />
-        <Route path="content" element={<ContentStudio />} />
-        <Route path="live" element={<LiveCenter />} />
-        <Route path="knowledge" element={<Knowledge />} />
-        <Route path="team" element={<Team />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="*" element={<Navigate replace to="/" />} />
-      </Route>
-    </Routes>
+    <WorkspaceProvider>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={<Dashboard />} />
+          <Route path="projects" element={<Projects />} />
+          <Route path="projects/:projectId" element={<ProjectDetail />} />
+          <Route path="content" element={<ContentStudio />} />
+          <Route path="live" element={<LiveCenter />} />
+          <Route path="knowledge" element={<Knowledge />} />
+          <Route path="team" element={<Team />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="*" element={<Navigate replace to="/" />} />
+        </Route>
+      </Routes>
+    </WorkspaceProvider>
   )
 }
-

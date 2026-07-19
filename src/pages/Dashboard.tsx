@@ -8,9 +8,11 @@ import {
   FileText,
   Sparkles,
 } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { activity, projects, queueItems } from '../data/demo'
-import { Avatar, ProgressBar, StatusChip } from '../components/ui'
+import { activity, queueItems } from '../data/demo'
+import { Avatar, Modal, ProgressBar, StatusChip } from '../components/ui'
+import { useWorkspace } from '../state/WorkspaceContext'
 
 const metrics = [
   { label: '进行中项目', value: '12', change: '+2 本月', icon: ClipboardCheck, tone: 'green' },
@@ -29,6 +31,16 @@ function typeTone(type: string) {
 }
 
 export function Dashboard() {
+  const { projects, completedQueueIds, completeQueueItem, notify } = useWorkspace()
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [showCompleted, setShowCompleted] = useState(false)
+  const visibleQueue = useMemo(() => queueItems.filter((item) => showCompleted || !completedQueueIds.includes(item.id)), [completedQueueIds, showCompleted])
+
+  const completeItem = (id: string, title: string) => {
+    completeQueueItem(id)
+    notify(`已完成：${title}`)
+  }
+
   return (
     <div className="page-stack dashboard-page">
       <section className="page-heading">
@@ -37,7 +49,7 @@ export function Dashboard() {
           <h1>上午好，周楠</h1>
           <p>今天有 4 项工作需要推进，其中 2 项会影响本周交付。</p>
         </div>
-        <button className="button button-secondary" type="button">
+        <button className="button button-secondary" type="button" onClick={() => setScheduleOpen(true)}>
           <CalendarDays size={17} />
           查看本周排期
         </button>
@@ -69,12 +81,14 @@ export function Dashboard() {
         <section className="panel queue-panel">
           <div className="section-heading">
             <div><h2>我的待办</h2><p>按优先级和截止时间排序</p></div>
-            <button className="text-button" type="button">查看全部</button>
+            <button className="text-button" type="button" onClick={() => setShowCompleted((value) => !value)}>{showCompleted ? '隐藏已完成' : '查看全部'}</button>
           </div>
           <div className="queue-list">
-            {queueItems.map((item) => (
-              <div className="queue-row" key={item.id}>
-                <button className="check-button" type="button" aria-label={`完成 ${item.title}`}><span /></button>
+            {visibleQueue.map((item) => {
+              const completed = completedQueueIds.includes(item.id)
+              return (
+              <div className={`queue-row ${completed ? 'queue-completed' : ''}`} key={item.id}>
+                <button className={`check-button ${completed ? 'checked' : ''}`} type="button" aria-pressed={completed} aria-label={`完成 ${item.title}`} onClick={() => completeItem(item.id, item.title)}><CheckCircle2 size={14} /></button>
                 <StatusChip tone={typeTone(item.type)}>{item.type}</StatusChip>
                 <div className="queue-copy">
                   <strong>{item.title}</strong>
@@ -85,7 +99,8 @@ export function Dashboard() {
                   {item.due}
                 </div>
               </div>
-            ))}
+            )})}
+            {visibleQueue.length === 0 ? <div className="inline-empty"><CheckCircle2 size={20} />今天的待办已经处理完了</div> : null}
           </div>
         </section>
 
@@ -149,6 +164,13 @@ export function Dashboard() {
           <div className="activity-footer"><CheckCircle2 size={16} /> 所有正式操作均已写入审计日志</div>
         </section>
       </div>
+      <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title="本周排期" description="优先处理会影响交付与直播准备的事项。">
+        <div className="schedule-list">
+          <div><span>周一 · 今天</span><strong>批准 Momo 定位报告</strong><StatusChip tone="coral">18:00</StatusChip></div>
+          <div><span>周二</span><strong>完成启动期脚本审校</strong><StatusChip tone="gold">内容</StatusChip></div>
+          <div><span>周四</span><strong>城市通勤诊断场 #2</strong><StatusChip tone="blue">直播</StatusChip></div>
+        </div>
+      </Modal>
     </div>
   )
 }

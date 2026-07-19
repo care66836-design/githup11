@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell,
   BriefcaseBusiness,
@@ -14,7 +14,9 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NewProjectDialog } from './NewProjectDialog'
+import { useWorkspace } from '../state/WorkspaceContext'
 
 const navigation = [
   { label: '工作台', href: '/', icon: LayoutDashboard },
@@ -37,10 +39,31 @@ const titleByPath: Record<string, string> = {
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [noticeOpen, setNoticeOpen] = useState(false)
+  const [newProjectOpen, setNewProjectOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const searchInput = useRef<HTMLInputElement>(null)
+  const { projects } = useWorkspace()
   const location = useLocation()
   const pageTitle = location.pathname.startsWith('/projects/')
     ? '项目详情'
     : titleByPath[location.pathname] ?? 'PetIP OS'
+
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return []
+    return projects.filter((project) => `${project.name}${project.creator}${project.pet}${project.code}`.toLowerCase().includes(query)).slice(0, 5)
+  }, [projects, searchQuery])
+
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        searchInput.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', focusSearch)
+    return () => window.removeEventListener('keydown', focusSearch)
+  }, [])
 
   return (
     <div className="app-shell">
@@ -102,11 +125,22 @@ export function AppShell() {
             <span>{pageTitle}</span>
           </div>
           <div className="topbar-actions">
-            <label className="global-search">
-              <Search size={17} />
-              <input aria-label="搜索项目、客户或内容" placeholder="搜索项目、客户或内容" />
-              <kbd>⌘ K</kbd>
-            </label>
+            <div className="global-search-wrap">
+              <label className="global-search">
+                <Search size={17} />
+                <input ref={searchInput} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} aria-label="搜索项目、客户或内容" placeholder="搜索项目、客户或内容" />
+                <kbd>⌘ K</kbd>
+              </label>
+              {searchQuery ? (
+                <div className="search-results-popover">
+                  {searchResults.length ? searchResults.map((project) => (
+                    <Link to={`/projects/${project.id}`} key={project.id} onClick={() => setSearchQuery('')}>
+                      <img src={project.image} alt="" /><span><strong>{project.name}</strong><small>{project.code} · {project.status}</small></span>
+                    </Link>
+                  )) : <p>没有找到匹配项目</p>}
+                </div>
+              ) : null}
+            </div>
             <div className="notice-wrap">
               <button className="icon-button notice-button" type="button" onClick={() => setNoticeOpen((value) => !value)} aria-label="查看通知">
                 <Bell size={19} />
@@ -115,12 +149,12 @@ export function AppShell() {
               {noticeOpen ? (
                 <div className="notice-popover">
                   <div className="popover-title"><strong>待办提醒</strong><span>4 项</span></div>
-                  <p>定位报告等待批准</p>
-                  <p>明日直播脚本尚未锁定</p>
+                  <Link to="/projects/momo" onClick={() => setNoticeOpen(false)}>定位报告等待批准</Link>
+                  <Link to="/live" onClick={() => setNoticeOpen(false)}>明日直播脚本尚未锁定</Link>
                 </div>
               ) : null}
             </div>
-            <button className="button button-primary top-create" type="button">
+            <button className="button button-primary top-create" type="button" onClick={() => setNewProjectOpen(true)}>
               <Plus size={17} />
               新建项目
             </button>
@@ -130,7 +164,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <NewProjectDialog open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
     </div>
   )
 }
-

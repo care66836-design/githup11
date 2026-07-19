@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import {
   AlertTriangle,
   ArrowRight,
@@ -18,8 +18,9 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react'
-import { ProgressBar, StatusChip } from '../components/ui'
-import { products } from '../data/demo'
+import { Modal, ProgressBar, StatusChip } from '../components/ui'
+import { useWorkspace } from '../state/WorkspaceContext'
+import type { ProductRow } from '../types'
 
 const liveTabs = ['直播总览', '直播间定位', '商品矩阵', '脚本结构', '场次复盘'] as const
 type LiveTab = (typeof liveTabs)[number]
@@ -41,40 +42,57 @@ const scriptBlocks = [
 
 export function LiveCenter() {
   const [tab, setTab] = useState<LiveTab>('场次复盘')
+  const [projectId, setProjectId] = useState('momo')
+  const [sessionOpen, setSessionOpen] = useState(false)
+  const [sessionTitle, setSessionTitle] = useState('城市通勤出行装备诊断场 #2')
+  const [scheduledAt, setScheduledAt] = useState('2026-07-24T19:30')
+  const [platform, setPlatform] = useState('抖音')
+  const importInput = useRef<HTMLInputElement>(null)
+  const { projects, addLiveSession, liveSessions, notify } = useWorkspace()
+  const project = projects.find((item) => item.id === projectId) ?? projects[0]
+
+  const createSession = (event: FormEvent) => {
+    event.preventDefault()
+    addLiveSession({ title: sessionTitle, project: project.name, platform, scheduledAt })
+    setSessionOpen(false)
+    setTab('直播总览')
+    notify('直播场次已创建并加入准备清单')
+  }
   return (
     <div className="page-stack live-center-page">
       <section className="page-heading compact-heading">
         <div><p className="eyebrow">电商与直播定位中心</p><h1>直播电商</h1><p>从直播适配、商品选择到下一场动作，统一沉淀。</p></div>
-        <div className="heading-actions"><button className="button button-secondary" type="button"><Download size={16} /> 导入场次数据</button><button className="button button-primary" type="button"><Radio size={16} /> 新建直播场次</button></div>
+        <div className="heading-actions"><input ref={importInput} className="visually-hidden" type="file" accept=".csv,.xlsx" onChange={(event) => { if (event.target.files?.[0]) notify(`已导入 ${event.target.files[0].name}，等待字段校验`) }} /><button className="button button-secondary" type="button" onClick={() => importInput.current?.click()}><Download size={16} /> 导入场次数据</button><button className="button button-primary" type="button" onClick={() => setSessionOpen(true)}><Radio size={16} /> 新建直播场次</button></div>
       </section>
 
       <section className="live-context-bar">
-        <img src="/assets/momo.jpg" alt="Momo" />
-        <div><span>当前项目</span><strong>林晚 × Momo 品牌主理人 IP</strong><p>场景诊断型直播 · 弱销售 · 主理人 + 宠物共同出镜</p></div>
+        <img src={project.image} alt={project.pet} />
+        <div><span>当前项目</span><strong>{project.name}</strong><p>场景诊断型直播 · 弱销售 · 主理人 + 宠物共同出镜</p></div>
         <div className="live-context-stat"><span>直播适配</span><strong>78</strong></div>
         <div className="live-context-stat"><span>商品就绪</span><strong>4 / 5</strong></div>
-        <button className="button button-secondary" type="button">切换项目 <ChevronDown size={16} /></button>
+        <label className="project-switcher"><span className="visually-hidden">切换项目</span><select value={project.id} onChange={(event) => { setProjectId(event.target.value); notify('已切换直播项目') }}>{projects.map((item) => <option value={item.id} key={item.id}>{item.creator} × {item.pet}</option>)}</select><ChevronDown size={16} /></label>
       </section>
 
       <div className="project-tabs live-tabs" role="tablist">
         {liveTabs.map((item) => <button type="button" role="tab" aria-selected={tab === item} className={tab === item ? 'active' : ''} key={item} onClick={() => setTab(item)}>{item}</button>)}
       </div>
 
-      {tab === '直播总览' ? <LiveOverview /> : null}
+      {tab === '直播总览' ? <LiveOverview onContinue={() => setTab('脚本结构')} latestSession={liveSessions[0]?.title} /> : null}
       {tab === '直播间定位' ? <LiveProfile /> : null}
       {tab === '商品矩阵' ? <ProductMatrix /> : null}
       {tab === '脚本结构' ? <ScriptStructure /> : null}
-      {tab === '场次复盘' ? <SessionReview /> : null}
+      {tab === '场次复盘' ? <SessionReview onChecklist={() => setTab('直播总览')} /> : null}
+      <Modal open={sessionOpen} onClose={() => setSessionOpen(false)} title="新建直播场次" description="创建后进入定位、商品、脚本和宠物休息计划检查。"><form className="operation-form" onSubmit={createSession}><label><span>场次名称</span><input required value={sessionTitle} onChange={(event) => setSessionTitle(event.target.value)} /></label><div className="form-grid"><label><span>平台</span><select value={platform} onChange={(event) => setPlatform(event.target.value)}><option>抖音</option><option>视频号</option><option>小红书</option></select></label><label><span>开播时间</span><input required type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /></label></div><div className="form-actions"><button className="button button-secondary" type="button" onClick={() => setSessionOpen(false)}>取消</button><button className="button button-primary" type="submit">创建场次</button></div></form></Modal>
     </div>
   )
 }
 
-function LiveOverview() {
+function LiveOverview({ onContinue, latestSession }: { onContinue: () => void; latestSession?: string }) {
   return (
     <div className="page-stack">
       <section className="metric-grid">{metricCards.map(({ label, value, delta, icon: Icon, tone }) => <article className="metric-card" key={label}><div className={`metric-icon metric-${tone}`}><Icon size={20} /></div><div><span>{label}</span><strong>{value}</strong><small>{delta} 较上场</small></div></article>)}</section>
       <div className="live-overview-grid">
-        <section className="panel"><div className="section-heading"><div><h2>下一场直播</h2><p>7 月 24 日 19:30 · 抖音</p></div><StatusChip tone="gold">准备中</StatusChip></div><h3 className="live-session-title">城市通勤出行装备诊断场 #2</h3><div className="readiness-list"><div><span>直播间定位</span><CheckCircle2 size={17} /></div><div><span>商品顺序</span><CheckCircle2 size={17} /></div><div><span>表达档案话术重写</span><StatusChip tone="gold">进行中</StatusChip></div><div><span>宠物出镜休息计划</span><AlertTriangle size={17} /></div></div><button className="button button-primary full-button" type="button">继续准备 <ArrowRight size={16} /></button></section>
+        <section className="panel"><div className="section-heading"><div><h2>下一场直播</h2><p>7 月 24 日 19:30 · 抖音</p></div><StatusChip tone="gold">准备中</StatusChip></div><h3 className="live-session-title">{latestSession ?? '城市通勤出行装备诊断场 #2'}</h3><div className="readiness-list"><div><span>直播间定位</span><CheckCircle2 size={17} /></div><div><span>商品顺序</span><CheckCircle2 size={17} /></div><div><span>表达档案话术重写</span><StatusChip tone="gold">进行中</StatusChip></div><div><span>宠物出镜休息计划</span><AlertTriangle size={17} /></div></div><button className="button button-primary full-button" type="button" onClick={onContinue}>继续准备 <ArrowRight size={16} /></button></section>
         <section className="panel"><div className="section-heading"><div><h2>最近复盘结论</h2><p>城市通勤诊断场 · 7 月 17 日</p></div></div><div className="review-summary-callout"><TrendingUp size={21} /><p>诊断式互动拉长停留，但尺寸演示出现过晚，前 30 分钟流失明显。</p></div><div className="issue-mini-list"><div><StatusChip tone="coral">停留</StatusChip><span>首轮第 5 分钟前置 Momo 演示</span></div><div><StatusChip tone="gold">话术</StatusChip><span>固定三项尺寸诊断顺序</span></div><div><StatusChip tone="blue">履约</StatusChip><span>增加车型与安装确认</span></div></div></section>
       </div>
     </div>
@@ -89,14 +107,27 @@ function LiveProfile() {
 }
 
 function ProductMatrix() {
-  return <section className="panel"><div className="section-heading"><div><h2>商品适配矩阵</h2><p>高利润不能覆盖低 IP 适配或高履约风险</p></div><button className="button button-secondary" type="button"><PackageCheck size={16} /> 新增商品</button></div><div className="data-table product-table"><div className="table-row table-head"><span>商品</span><span>角色</span><span>售价</span><span>IP 适配</span><span>直播适配</span><span>毛利</span><span>退款风险</span><span>建议</span></div>{products.map((product) => <div className="table-row" key={product.id}><strong>{product.name}</strong><span><StatusChip tone={product.role === '主推品' ? 'coral' : product.role === '利润品' ? 'gold' : 'neutral'}>{product.role}</StatusChip></span><span>¥{product.price}</span><div className="numeric-fit"><ProgressBar value={product.ipFit} compact /><strong>{product.ipFit}</strong></div><div className="numeric-fit"><ProgressBar value={product.liveFit} tone="blue" compact /><strong>{product.liveFit}</strong></div><span>{product.margin}%</span><span><StatusChip tone={product.refundRisk === '高' ? 'coral' : product.refundRisk === '中' ? 'gold' : 'green'}>{product.refundRisk}</StatusChip></span><span><StatusChip tone={product.recommendation === '优先' ? 'green' : product.recommendation === '测试' ? 'gold' : product.recommendation === '谨慎' ? 'coral' : 'blue'}>{product.recommendation}</StatusChip></span></div>)}</div></section>
+  const { products, addProduct, notify } = useWorkspace()
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [role, setRole] = useState<ProductRow['role']>('引流品')
+  const [price, setPrice] = useState(99)
+  const [margin, setMargin] = useState(45)
+  const validRoles: ProductRow['role'][] = ['引流品', '主推品', '利润品', '形象品', '连带品']
+  return <><section className="panel"><div className="section-heading"><div><h2>商品适配矩阵</h2><p>高利润不能覆盖低 IP 适配或高履约风险</p></div><button className="button button-secondary" type="button" onClick={() => setOpen(true)}><PackageCheck size={16} /> 新增商品</button></div><div className="data-table product-table"><div className="table-row table-head"><span>商品</span><span>角色</span><span>售价</span><span>IP 适配</span><span>直播适配</span><span>毛利</span><span>退款风险</span><span>建议</span></div>{products.map((product) => <div className="table-row" key={product.id}><strong>{product.name}</strong><span><StatusChip tone={product.role === '主推品' ? 'coral' : product.role === '利润品' ? 'gold' : 'neutral'}>{product.role}</StatusChip></span><span>¥{product.price}</span><div className="numeric-fit"><ProgressBar value={product.ipFit} compact /><strong>{product.ipFit}</strong></div><div className="numeric-fit"><ProgressBar value={product.liveFit} tone="blue" compact /><strong>{product.liveFit}</strong></div><span>{product.margin}%</span><span><StatusChip tone={product.refundRisk === '高' ? 'coral' : product.refundRisk === '中' ? 'gold' : 'green'}>{product.refundRisk}</StatusChip></span><span><StatusChip tone={product.recommendation === '优先' ? 'green' : product.recommendation === '测试' ? 'gold' : product.recommendation === '谨慎' ? 'coral' : 'blue'}>{product.recommendation}</StatusChip></span></div>)}</div></section><Modal open={open} onClose={() => setOpen(false)} title="新增直播商品" description="新增商品默认进入测试状态，适配分需要人工评估。"><form className="operation-form" onSubmit={(event) => { event.preventDefault(); addProduct({ name, role, price, margin }); setOpen(false); setName(''); notify('商品已加入适配矩阵') }}><label><span>商品名称</span><input required value={name} onChange={(event) => setName(event.target.value)} /></label><div className="form-grid"><label><span>商品角色</span><select value={role} onChange={(event) => setRole(event.target.value as ProductRow['role'])}>{validRoles.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>售价</span><input min="0" type="number" value={price} onChange={(event) => setPrice(Number(event.target.value))} /></label></div><label><span>毛利率（%）</span><input min="0" max="100" type="number" value={margin} onChange={(event) => setMargin(Number(event.target.value))} /></label><div className="form-actions"><button className="button button-secondary" type="button" onClick={() => setOpen(false)}>取消</button><button className="button button-primary" type="submit">加入矩阵</button></div></form></Modal></>
 }
 
 function ScriptStructure() {
-  return <div className="script-layout"><section className="panel script-panel"><div className="section-heading"><div><h2>20 分钟直播循环</h2><p>城市通勤诊断场 v2 · 匹配林晚表达档案</p></div><button className="button button-secondary" type="button"><Sparkles size={16} /> 风格重写</button></div><div className="script-timeline">{scriptBlocks.map((block, index) => <div className="script-block" key={block.time}><div className={`timeline-marker marker-${block.tone}`}><span>{index + 1}</span></div><time>{block.time}</time><div><StatusChip tone={block.tone}>{block.type}</StatusChip><strong>{block.title}</strong><p>{block.copy}</p></div><button className="icon-button ghost" type="button" aria-label={`编辑 ${block.title}`}><ArrowRight size={16} /></button></div>)}</div></section><aside className="panel script-preview"><div className="section-heading"><div><h2>话术预览</h2><p>当前：开场</p></div><Play size={18} /></div><p className="spoken-copy">“先别急着报体重。你平时是步行、开车，还是要坐地铁？路线不同，包的重点完全不一样。”</p><div className="voice-match"><span>人设一致</span><strong>93</strong><ProgressBar value={93} compact /></div><small>已避免：家人们、闭眼入、错过没有</small></aside></div>
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [rewritten, setRewritten] = useState(false)
+  const { notify } = useWorkspace()
+  const activeBlock = scriptBlocks[activeIndex]
+  const preview = activeIndex === 0 ? '先别急着报体重。你平时是步行、开车，还是要坐地铁？路线不同，包的重点完全不一样。' : activeBlock.copy
+  return <div className="script-layout"><section className="panel script-panel"><div className="section-heading"><div><h2>20 分钟直播循环</h2><p>城市通勤诊断场 v2 · 匹配林晚表达档案</p></div><button className="button button-secondary" type="button" onClick={() => { setRewritten(true); notify('脚本已按林晚表达档案完成风格重写') }}><Sparkles size={16} /> {rewritten ? '已完成重写' : '风格重写'}</button></div><div className="script-timeline">{scriptBlocks.map((block, index) => <div className={`script-block ${activeIndex === index ? 'active' : ''}`} key={block.time}><div className={`timeline-marker marker-${block.tone}`}><span>{index + 1}</span></div><time>{block.time}</time><div><StatusChip tone={block.tone}>{block.type}</StatusChip><strong>{block.title}</strong><p>{block.copy}</p></div><button className="icon-button ghost" type="button" aria-label={`编辑 ${block.title}`} onClick={() => setActiveIndex(index)}><ArrowRight size={16} /></button></div>)}</div></section><aside className="panel script-preview"><div className="section-heading"><div><h2>话术预览</h2><p>当前：{activeBlock.type}</p></div><Play size={18} /></div><p className="spoken-copy">“{preview}”</p><div className="voice-match"><span>人设一致</span><strong>{rewritten ? 96 : 93}</strong><ProgressBar value={rewritten ? 96 : 93} compact /></div><small>已避免：家人们、闭眼入、错过没有</small></aside></div>
 }
 
-function SessionReview() {
+function SessionReview({ onChecklist }: { onChecklist: () => void }) {
+  const { notify } = useWorkspace()
   const problems = [
     { type: '停留问题', tone: 'coral' as const, severity: '高', evidence: '前 30 分钟平均停留仅 67 秒，低于全场 94 秒。', action: '把 Momo 进包演示前置到首轮第 5 分钟。' },
     { type: '话术问题', tone: 'gold' as const, severity: '中', evidence: '用户重复询问尺寸，回答顺序不稳定。', action: '固定“肩高、背长、体重”三项诊断顺序。' },
@@ -104,7 +135,7 @@ function SessionReview() {
   ]
   return (
     <div className="page-stack">
-      <section className="session-header"><div className="session-play"><Play size={20} fill="currentColor" /></div><div><span>最近完成场次</span><h2>城市通勤出行装备诊断场</h2><p>7 月 17 日 19:30-21:30 · 抖音 · 2 小时</p></div><StatusChip tone="green">已复盘</StatusChip><button className="button button-secondary" type="button">查看直播记录</button></section>
+      <section className="session-header"><div className="session-play"><Play size={20} fill="currentColor" /></div><div><span>最近完成场次</span><h2>城市通勤出行装备诊断场</h2><p>7 月 17 日 19:30-21:30 · 抖音 · 2 小时</p></div><StatusChip tone="green">已复盘</StatusChip><button className="button button-secondary" type="button" onClick={() => notify('直播记录已载入，当前演示版暂不包含视频文件', 'warning')}>查看直播记录</button></section>
       <section className="metric-grid live-metric-grid">{metricCards.map(({ label, value, delta, icon: Icon, tone }) => <article className="metric-card" key={label}><div className={`metric-icon metric-${tone}`}><Icon size={20} /></div><div><span>{label}</span><strong>{value}</strong><small>{delta} 较上场</small></div></article>)}</section>
       <div className="review-grid">
         <section className="panel metric-detail-panel">
@@ -122,8 +153,7 @@ function SessionReview() {
           <div className="live-issue-list">{problems.map((problem) => <div key={problem.type}><div><StatusChip tone={problem.tone}>{problem.type}</StatusChip><span className={`severity severity-${problem.severity}`}>{problem.severity}优先级</span></div><p>{problem.evidence}</p><strong><ArrowRight size={15} />{problem.action}</strong></div>)}</div>
         </section>
       </div>
-      <section className="next-session-bar"><CheckCircle2 size={20} /><div><strong>下一场调整建议已生成</strong><p>3 项动作将在 7 月 24 日场次准备清单中自动核验。</p></div><button className="button button-primary" type="button">查看下场清单 <ArrowRight size={16} /></button></section>
+      <section className="next-session-bar"><CheckCircle2 size={20} /><div><strong>下一场调整建议已生成</strong><p>3 项动作将在 7 月 24 日场次准备清单中自动核验。</p></div><button className="button button-primary" type="button" onClick={onChecklist}>查看下场清单 <ArrowRight size={16} /></button></section>
     </div>
   )
 }
-

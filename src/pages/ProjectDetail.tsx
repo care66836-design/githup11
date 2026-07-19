@@ -16,8 +16,10 @@ import {
   Users,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
-import { Avatar, ProgressBar, StatusChip } from '../components/ui'
-import { contentDrafts, diagnosticModules, positioningOptions, products, projects } from '../data/demo'
+import { Avatar, Modal, ProgressBar, StatusChip } from '../components/ui'
+import { contentDrafts, diagnosticModules, positioningOptions, products } from '../data/demo'
+import { useWorkspace } from '../state/WorkspaceContext'
+import type { DiagnosticModule } from '../types'
 
 const tabs = ['项目总览', '定位诊断', '表达档案', '内容计划', '直播电商'] as const
 type ProjectTab = (typeof tabs)[number]
@@ -31,10 +33,21 @@ const team = [
 
 export function ProjectDetail() {
   const { projectId } = useParams()
+  const { projects, notify } = useWorkspace()
   const project = projects.find((item) => item.id === projectId) ?? projects[0]
   const [activeTab, setActiveTab] = useState<ProjectTab>('定位诊断')
   const [selectedOption, setSelectedOption] = useState('different')
+  const [approvalOpen, setApprovalOpen] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [approved, setApproved] = useState(false)
+  const [activeDiagnosis, setActiveDiagnosis] = useState<DiagnosticModule | null>(null)
   const selected = useMemo(() => positioningOptions.find((option) => option.id === selectedOption) ?? positioningOptions[1], [selectedOption])
+
+  const approve = () => {
+    setApproved(true)
+    setApprovalOpen(false)
+    notify('定位方案已批准，内容正式审核权限已开启')
+  }
 
   return (
     <div className="project-detail-page">
@@ -54,8 +67,8 @@ export function ProjectDetail() {
           {team.map((member) => <Avatar key={member.name} name={member.name} tone={member.tone} />)}
           <span>4 人协作</span>
         </div>
-        <button className="button button-primary" type="button"><FileCheck2 size={17} /> 提交负责人批准</button>
-        <button className="icon-button" type="button" aria-label="更多项目操作"><MoreHorizontal size={20} /></button>
+        <button className={`button ${approved ? 'button-secondary' : 'button-primary'}`} type="button" onClick={() => setApprovalOpen(true)}><FileCheck2 size={17} /> {approved ? '已批准' : '提交负责人批准'}</button>
+        <button className="icon-button" type="button" aria-label="更多项目操作" onClick={() => notify('项目归档、导出和成员管理将在正式服务端接入后开放', 'warning')}><MoreHorizontal size={20} /></button>
       </section>
 
       <div className="project-tabs" role="tablist" aria-label="项目模块">
@@ -65,17 +78,32 @@ export function ProjectDetail() {
       </div>
 
       <div className="project-tab-content">
-        {activeTab === '项目总览' ? <OverviewTab selectedLabel={selected.shortLabel} /> : null}
-        {activeTab === '定位诊断' ? <PositioningTab selectedOption={selectedOption} onSelect={setSelectedOption} /> : null}
+        {activeTab === '项目总览' ? <OverviewTab selectedLabel={selected.shortLabel} onReview={() => setApprovalOpen(true)} /> : null}
+        {activeTab === '定位诊断' ? <PositioningTab selectedOption={selectedOption} onSelect={setSelectedOption} onDiagnosis={setActiveDiagnosis} onReport={() => setReportOpen(true)} /> : null}
         {activeTab === '表达档案' ? <VoiceTab /> : null}
         {activeTab === '内容计划' ? <ContentPlanTab /> : null}
         {activeTab === '直播电商' ? <LiveSummaryTab /> : null}
       </div>
+      <Modal open={approvalOpen} onClose={() => setApprovalOpen(false)} title="负责人批准" description="批准后，主方案将成为内容与直播生成的默认依据。">
+        <div className="approval-checklist">
+          <div><CheckCircle2 size={17} /><span><strong>八模块诊断</strong><small>证据完整度 83%</small></span></div>
+          <div><CheckCircle2 size={17} /><span><strong>主定位方案</strong><small>{selected.label}</small></span></div>
+          <div><CheckCircle2 size={17} /><span><strong>风险边界</strong><small>竞品判断保留证据，直播维持弱销售</small></span></div>
+        </div>
+        <div className="form-actions"><button className="button button-secondary" type="button" onClick={() => setApprovalOpen(false)}>返回检查</button><button className="button button-primary" type="button" onClick={approve}>确认批准</button></div>
+      </Modal>
+      <Modal open={reportOpen} onClose={() => setReportOpen(false)} title="正式定位报告" description={`${project.code} · 当前主方案`} size="large">
+        <div className="report-preview"><StatusChip tone={selected.color}>{selected.label}</StatusChip><h3>{selected.positioning}</h3><dl><div><dt>人物人设</dt><dd>{selected.persona}</dd></div><div><dt>核心用户</dt><dd>{selected.audience}</dd></div><div><dt>平台策略</dt><dd>{selected.strategy}</dd></div></dl><p><strong>优势：</strong>{selected.advantage}</p><p><strong>风险：</strong>{selected.risk}</p></div>
+        <div className="form-actions"><button className="button button-secondary" type="button" onClick={() => setReportOpen(false)}>继续调整</button><button className="button button-primary" type="button" onClick={() => { setReportOpen(false); setApprovalOpen(true) }}>提交批准</button></div>
+      </Modal>
+      <Modal open={Boolean(activeDiagnosis)} onClose={() => setActiveDiagnosis(null)} title={activeDiagnosis?.name ?? '诊断详情'} description="诊断依据与下一步补充要求">
+        {activeDiagnosis ? <div className="diagnosis-detail"><div><span>当前得分</span><strong>{activeDiagnosis.score}</strong><ProgressBar value={activeDiagnosis.score} /></div><p>{activeDiagnosis.evidence}</p><StatusChip tone={activeDiagnosis.status === '完整' ? 'green' : 'gold'}>{activeDiagnosis.status}</StatusChip>{activeDiagnosis.status === '需补充' ? <p>建议在资料采集表中补充频次、预算或团队执行排期。</p> : <p>当前证据可用于正式定位报告，后续修改会写入审计记录。</p>}</div> : null}
+      </Modal>
     </div>
   )
 }
 
-function OverviewTab({ selectedLabel }: { selectedLabel: string }) {
+function OverviewTab({ selectedLabel, onReview }: { selectedLabel: string; onReview: () => void }) {
   return (
     <div className="project-overview-grid">
       <div className="overview-main page-stack">
@@ -111,7 +139,7 @@ function OverviewTab({ selectedLabel }: { selectedLabel: string }) {
           <div className="section-heading"><div><h2>下一里程碑</h2><p>7 月 22 日 10:00</p></div></div>
           <strong className="milestone-title">确认正式定位与首周选题</strong>
           <p className="muted-copy">负责人批准后，系统才会允许内容进入正式审核。</p>
-          <button className="button button-primary full-button" type="button">查看审核清单</button>
+          <button className="button button-primary full-button" type="button" onClick={onReview}>查看审核清单</button>
         </section>
         <section className="panel">
           <div className="section-heading"><div><h2>项目成员</h2><p>仅成员可查看客户资料</p></div><Users size={18} /></div>
@@ -125,7 +153,8 @@ function OverviewTab({ selectedLabel }: { selectedLabel: string }) {
   )
 }
 
-function PositioningTab({ selectedOption, onSelect }: { selectedOption: string; onSelect: (id: string) => void }) {
+function PositioningTab({ selectedOption, onSelect, onDiagnosis, onReport }: { selectedOption: string; onSelect: (id: string) => void; onDiagnosis: (module: DiagnosticModule) => void; onReport: () => void }) {
+  const { notify } = useWorkspace()
   return (
     <div className="page-stack">
       <section className="panel diagnosis-panel">
@@ -135,7 +164,7 @@ function PositioningTab({ selectedOption, onSelect }: { selectedOption: string; 
         </div>
         <div className="diagnosis-grid">
           {diagnosticModules.map((module, index) => (
-            <button className="diagnosis-item" type="button" key={module.name}>
+            <button className="diagnosis-item" type="button" key={module.name} onClick={() => onDiagnosis(module)}>
               <span className="diagnosis-number">{String(index + 1).padStart(2, '0')}</span>
               <div><strong>{module.name}</strong><p>{module.evidence}</p></div>
               <div className="diagnosis-score"><strong>{module.score}</strong><ProgressBar value={module.score} tone={module.status === '完整' ? 'green' : 'gold'} compact /></div>
@@ -148,7 +177,7 @@ function PositioningTab({ selectedOption, onSelect }: { selectedOption: string; 
       <section>
         <div className="section-heading outside-heading">
           <div><h2>定位方案对比</h2><p>选择一个主方案，也可以在正式报告中混合调整。</p></div>
-          <button className="button button-secondary" type="button"><Sparkles size={16} /> 重新生成三案</button>
+          <button className="button button-secondary" type="button" onClick={() => notify('已基于最新诊断重新计算三案，当前推荐顺序不变')}><Sparkles size={16} /> 重新生成三案</button>
         </div>
         <div className="option-grid">
           {positioningOptions.map((option) => {
@@ -184,13 +213,16 @@ function PositioningTab({ selectedOption, onSelect }: { selectedOption: string; 
 
       <section className="selection-bar">
         <div><StatusChip tone="coral">当前主方案</StatusChip><strong>{positioningOptions.find((option) => option.id === selectedOption)?.shortLabel}</strong><span>可在报告编辑器中混合其他方案模块</span></div>
-        <button className="button button-primary" type="button">进入正式报告 <ArrowRight size={16} /></button>
+        <button className="button button-primary" type="button" onClick={onReport}>进入正式报告 <ArrowRight size={16} /></button>
       </section>
     </div>
   )
 }
 
 function VoiceTab() {
+  const { notify } = useWorkspace()
+  const [sampleOpen, setSampleOpen] = useState(false)
+  const [sample, setSample] = useState('')
   const attributes = [
     ['专业度', 82], ['口语化', 76], ['幽默度', 42], ['情绪浓度', 36], ['争议承受', 48], ['销售强度', 38],
   ] as const
@@ -212,13 +244,14 @@ function VoiceTab() {
         <div className="word-section"><span>禁用词</span><div>{['闭眼入', '天花板', '绝绝子', '家人们冲', '颠覆想象'].map((word) => <em className="word-chip banned" key={word}>{word}</em>)}</div></div>
       </section>
       <aside className="panel samples-panel">
-        <div className="section-heading"><div><h2>真实表达样本</h2><p>3 条已批准 · 建议补充 2 条</p></div><button className="text-button" type="button">添加样本</button></div>
+        <div className="section-heading"><div><h2>真实表达样本</h2><p>3 条已批准 · 建议补充 2 条</p></div><button className="text-button" type="button" onClick={() => setSampleOpen(true)}>添加样本</button></div>
         <div className="sample-list">
           <div><StatusChip tone="blue">口播转写</StatusChip><p>“先别急着看承重。狗进包以后能不能转身，背起来重心往不往后跑，这两个问题更实际。”</p><small>产品测评 · 2026/07/12</small></div>
           <div><StatusChip tone="green">已发布文案</StatusChip><p>“Momo 今天把第三版样包坐塌了。挺好，省得它到客户手上再塌。”</p><small>朋友圈 · 2026/07/08</small></div>
           <div><StatusChip tone="coral">不喜欢的表达</StatusChip><p>“家人们这个真的闭眼入，错过就没有了。”</p><small>员工标注：夸张、没有使用边界</small></div>
         </div>
       </aside>
+      <Modal open={sampleOpen} onClose={() => setSampleOpen(false)} title="添加真实表达样本" description="样本需要人工审核后才会影响生成规则。"><form className="operation-form" onSubmit={(event) => { event.preventDefault(); notify('表达样本已提交审核'); setSample(''); setSampleOpen(false) }}><label><span>样本文本</span><textarea required rows={5} value={sample} onChange={(event) => setSample(event.target.value)} placeholder="粘贴本人真实口播、聊天或已发布文案" /></label><div className="form-actions"><button className="button button-secondary" type="button" onClick={() => setSampleOpen(false)}>取消</button><button className="button button-primary" type="submit">提交审核</button></div></form></Modal>
     </div>
   )
 }
