@@ -8,6 +8,7 @@
     "dev:web": "vite --host 0.0.0.0",
     "dev:api": "tsx watch server/index.ts",
     "start": "tsx server/index.ts",
+    "configure:openai": "node scripts/configure-openai-key.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
